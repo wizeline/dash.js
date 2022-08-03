@@ -142,13 +142,12 @@ function FragmentLoader(config) {
     /**
      * Decrypts an AES encrypted LS segment
      * @param {ArrayBuffer} videoChunk LS segment
+     * @param {Object} headers Object with all the response headers from the request
      * @returns Promise
      */
-    async function decryptSegment(videoChunk) {
+    async function decryptSegment(videoChunk, headers) {
         if (videoChunk) {
-            const response = await fetch('https://encrypt-free.vividas.wize.mx/e/v3.1b/segment', { method: 'POST', body: videoChunk });
-            const data = await response.arrayBuffer();
-            const pass = navigator.userAgent + response.headers.get('ls_date') + videoChunk.byteLength;
+            const pass = navigator.userAgent + headers['ls_date'];
             const utf8 = new TextEncoder().encode(pass);
             const hashBuffer = await crypto.subtle.digest('SHA-256', utf8);
             const hashArray = Array.from(new Uint8Array(hashBuffer));
@@ -156,9 +155,9 @@ function FragmentLoader(config) {
 
             const decryptionParameters = {
                 pass: hashHex,
-                iv: data.slice(0, 12),
-                salt: data.slice(12, 12 + 16),
-                data: data.slice(12 + 16),
+                iv: videoChunk.slice(0, 12),
+                salt: videoChunk.slice(12, 12 + 16),
+                data: videoChunk.slice(12 + 16),
             };
 
             return decrypt(decryptionParameters.data, decryptionParameters.iv, decryptionParameters.salt, decryptionParameters.pass);
@@ -193,8 +192,8 @@ function FragmentLoader(config) {
                         });
                     }
                 },
-                success: function (data) {
-                    decryptSegment(data)
+                success: function (data, status, url, headers) {
+                    decryptSegment(data, headers)
                         .then((decrypted) => (report(decrypted)))
                         .catch((error) => (report(undefined, new DashJSError(
                             errors.FRAGMENT_LOADER_LOADING_FAILURE_ERROR_CODE,
