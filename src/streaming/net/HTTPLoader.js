@@ -225,7 +225,20 @@ function HTTPLoader(cfg) {
                 handleLoaded(true);
 
                 if (config.success) {
-                    config.success(httpRequest.response.response, httpRequest.response.statusText, httpRequest.response.responseURL);
+                    /**
+                     * Creates a map with all the response headers from the request
+                     */
+                    const headers = httpRequest.response.getAllResponseHeaders();
+                    const headersArray = headers.trim().split(/[\r\n]+/);
+                    const headersMap = {};
+                    headersArray.forEach(function (line) {
+                        const parts = line.split(': ');
+                        const header = parts.shift();
+                        const value = parts.join(': ');
+                        headersMap[header] = value;
+                    });
+
+                    config.success(httpRequest.response.response, httpRequest.response.statusText, httpRequest.response.responseURL, headersMap);
                 }
 
                 if (config.complete) {
