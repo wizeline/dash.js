@@ -147,7 +147,22 @@ function FragmentLoader(config) {
      */
     async function decryptSegment(videoChunk, headers) {
         if (videoChunk) {
-            const pass = navigator.userAgent + headers['ls_date'];
+            let date;
+            let media;
+            let size = '';
+
+            // eslint-disable-next-line
+            if (STREAM_TYPE === 'VOD') {
+                const response = await fetch('https://encrypt-free.vividas.wize.mx/e/v3.1b/segment', { method: 'POST', body: videoChunk });
+                media = await response.arrayBuffer();
+                date = response.headers.get('ls_date');
+                size = videoChunk.byteLength
+            } else {
+                media = videoChunk;
+                date = headers['ls_date'];
+            }
+
+            const pass = navigator.userAgent + date + size;
             const utf8 = new TextEncoder().encode(pass);
             const hashBuffer = await crypto.subtle.digest('SHA-256', utf8);
             const hashArray = Array.from(new Uint8Array(hashBuffer));
@@ -155,9 +170,9 @@ function FragmentLoader(config) {
 
             const decryptionParameters = {
                 pass: hashHex,
-                iv: videoChunk.slice(0, 12),
-                salt: videoChunk.slice(12, 12 + 16),
-                data: videoChunk.slice(12 + 16),
+                iv: media.slice(0, 12),
+                salt: media.slice(12, 12 + 16),
+                data: media.slice(12 + 16),
             };
 
             return decrypt(decryptionParameters.data, decryptionParameters.iv, decryptionParameters.salt, decryptionParameters.pass);
