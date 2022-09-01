@@ -119,24 +119,81 @@ function FragmentLoader(config) {
     }
 
     /**
-     * Receives the appropiate decryption parameters and data to decrypt a LS segment
-     * @param {ArrayBuffer} encryptedChunk Data to decrypt
-     * @param {ArrayBuffer} iv Decryption parameter
-     * @param {ArrayBuffer} salt Decryption parameter
-     * @param {String} pass Password to use for decryption
-     * @returns ArrayBuffer
+     * Joins 2 buffers into a new one
+     * 
+     * @param {ArrayBuffer} buffer1 
+     * @param {ArrayBuffer} buffer2 
+     * 
+     * @returns New buffer with the content joined
      */
-    async function decrypt(encryptedChunk, iv, salt, pass) {
+    function appendBuffer(buffer1, buffer2) {
+        var tmp = new Uint8Array(buffer1.byteLength + buffer2.byteLength);
+        tmp.set(new Uint8Array(buffer1), 0);
+        tmp.set(new Uint8Array(buffer2), buffer1.byteLength);
+        return tmp.buffer;
+    };
+
+    /**
+     * Decrypt the chunk passed with the decryption params
+     * 
+     * @param {ArrayBuffer} chunk 
+     * @param {ArrayBuffer} iv 
+     * @param {ArrayBuffer} salt 
+     * @param {String} pass 
+     * 
+     * @returns ArrayBuffer with decrypted data
+     */
+    async function decryptChunk(chunk, iv, salt, pass) {
         const keyMaterial = await getKeyMaterial(pass);
         const key = await getKey(keyMaterial, salt);
+
         return window.crypto.subtle.decrypt(
             {
                 name: 'AES-GCM',
                 iv: iv
             },
             key,
-            encryptedChunk
+            chunk
         );
+    }
+
+    /**
+     * Receives the appropiate decryption parameters and data to decrypt a segment
+     * @param {ArrayBuffer} encryptedSegment Data to decrypt
+     * @param {ArrayBuffer} iv Decryption parameter
+     * @param {ArrayBuffer} salt Decryption parameter
+     * @param {String} pass Password to use for decryption
+     * @returns ArrayBuffer
+     */
+    async function decrypt(encryptedSegment, iv, salt, pass) {
+        let currentBufferIndex = 0;
+        let finalBuffer = new Uint8Array(0).buffer;
+        const segmentSize = encryptedSegment.byteLength;
+
+        console.log('ENCRYPTED SEGMENT SIZE: ', encryptedSegment);
+
+        // Takes chunk by chunk and decrypts if necessary
+        while (currentBufferIndex < segmentSize) {
+            const isEncrypted = new DataView(encryptedSegment.slice(currentBufferIndex, currentBufferIndex + 4)).getInt32();
+            currentBufferIndex = currentBufferIndex + 4;
+            const chunkSize = new DataView(encryptedSegment.slice(currentBufferIndex, currentBufferIndex + 4)).getInt32();
+            currentBufferIndex = currentBufferIndex + 4;
+            const actualDataChunk = encryptedSegment.slice(currentBufferIndex, currentBufferIndex + chunkSize);
+            currentBufferIndex = currentBufferIndex + chunkSize
+
+            console.log('isEncrypted', isEncrypted);
+            console.log('chunkSize', chunkSize);
+            console.log('chunk Data', actualDataChunk);
+            console.log('CurrentBufferIndex', currentBufferIndex);
+
+            if (isEncrypted) {
+                actualDataChunk = await decryptChunk(actualDataChunk, iv, salt, pass);
+            }
+
+            finalBuffer = appendBuffer(finalBuffer, actualDataChunk);
+        }
+
+        return finalBuffer;
     }
 
     /**
@@ -153,7 +210,7 @@ function FragmentLoader(config) {
 
             // eslint-disable-next-line
             if (STREAM_TYPE === 'VOD') {
-                const response = await fetch('https://encrypt-free.vividas.wize.mx/e/v3.1b/segment', { method: 'POST', body: videoChunk });
+                const response = await fetch('http://localhost/e/v3.1b/segment', { method: 'POST', body: videoChunk });
                 media = await response.arrayBuffer();
                 date = response.headers.get('ls_date');
                 size = videoChunk.byteLength
