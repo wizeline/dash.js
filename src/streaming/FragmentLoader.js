@@ -170,8 +170,6 @@ function FragmentLoader(config) {
         let finalBuffer = new Uint8Array(0).buffer;
         const segmentSize = encryptedSegment.byteLength;
 
-        console.log('ENCRYPTED SEGMENT SIZE: ', encryptedSegment);
-
         // Takes chunk by chunk and decrypts if necessary
         while (currentBufferIndex < segmentSize) {
             const isEncrypted = new DataView(encryptedSegment.slice(currentBufferIndex, currentBufferIndex + 4)).getInt32();
@@ -179,12 +177,7 @@ function FragmentLoader(config) {
             const chunkSize = new DataView(encryptedSegment.slice(currentBufferIndex, currentBufferIndex + 4)).getInt32();
             currentBufferIndex = currentBufferIndex + 4;
             const actualDataChunk = encryptedSegment.slice(currentBufferIndex, currentBufferIndex + chunkSize);
-            currentBufferIndex = currentBufferIndex + chunkSize
-
-            console.log('isEncrypted', isEncrypted);
-            console.log('chunkSize', chunkSize);
-            console.log('chunk Data', actualDataChunk);
-            console.log('CurrentBufferIndex', currentBufferIndex);
+            currentBufferIndex = currentBufferIndex + chunkSize;
 
             if (isEncrypted) {
                 actualDataChunk = await decryptChunk(actualDataChunk, iv, salt, pass);
@@ -210,7 +203,7 @@ function FragmentLoader(config) {
 
             // eslint-disable-next-line
             if (STREAM_TYPE === 'VOD') {
-                const response = await fetch('http://localhost/e/v3.1b/segment', { method: 'POST', body: videoChunk });
+                const response = await fetch('https://encrypt-free.vividas.wize.mx/e/v3.1b/segment', { method: 'POST', body: videoChunk });
                 media = await response.arrayBuffer();
                 date = response.headers.get('ls_date');
                 size = videoChunk.byteLength
