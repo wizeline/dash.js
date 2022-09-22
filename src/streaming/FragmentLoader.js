@@ -84,151 +84,6 @@ function FragmentLoader(config) {
         }
     }
 
-    /*
-        Get some key material to use as input to the deriveKey method.
-        The key material is a password supplied by the user.
-    */
-    function getKeyMaterial(password) {
-        const enc = new TextEncoder();
-        return window.crypto.subtle.importKey(
-            'raw', 
-            enc.encode(password),
-            { name: 'PBKDF2' }, 
-            false, 
-            ['deriveBits', 'deriveKey']
-        );
-    }
-
-    /*
-        Given some key material and some random salt
-        derive an AES-GCM key using PBKDF2.
-    */
-    function getKey(keyMaterial, salt) {
-        return window.crypto.subtle.deriveKey(
-            {
-                'name': 'PBKDF2',
-                salt: salt, 
-                'iterations': 100000,
-                'hash': 'SHA-256'
-            },
-            keyMaterial,
-            { 'name': 'AES-GCM', 'length': 256 },
-            true,
-            [ 'encrypt', 'decrypt' ]
-        );
-    }
-
-    /**
-     * Joins 2 buffers into a new one
-     * 
-     * @param {ArrayBuffer} buffer1 
-     * @param {ArrayBuffer} buffer2 
-     * 
-     * @returns New buffer with the content joined
-     */
-    function appendBuffer(buffer1, buffer2) {
-        var tmp = new Uint8Array(buffer1.byteLength + buffer2.byteLength);
-        tmp.set(new Uint8Array(buffer1), 0);
-        tmp.set(new Uint8Array(buffer2), buffer1.byteLength);
-        return tmp.buffer;
-    };
-
-    /**
-     * Decrypt the chunk passed with the decryption params
-     * 
-     * @param {ArrayBuffer} chunk 
-     * @param {ArrayBuffer} iv 
-     * @param {ArrayBuffer} salt 
-     * @param {String} pass 
-     * 
-     * @returns ArrayBuffer with decrypted data
-     */
-    async function decryptChunk(chunk, iv, salt, pass) {
-        const keyMaterial = await getKeyMaterial(pass);
-        const key = await getKey(keyMaterial, salt);
-
-        return window.crypto.subtle.decrypt(
-            {
-                name: 'AES-GCM',
-                iv: iv
-            },
-            key,
-            chunk
-        );
-    }
-
-    /**
-     * Receives the appropiate decryption parameters and data to decrypt a segment
-     * @param {ArrayBuffer} encryptedSegment Data to decrypt
-     * @param {ArrayBuffer} iv Decryption parameter
-     * @param {ArrayBuffer} salt Decryption parameter
-     * @param {String} pass Password to use for decryption
-     * @returns ArrayBuffer
-     */
-    async function decrypt(encryptedSegment, iv, salt, pass) {
-        let currentBufferIndex = 0;
-        let finalBuffer = new Uint8Array(0).buffer;
-        const segmentSize = encryptedSegment.byteLength;
-
-        // Takes chunk by chunk and decrypts if necessary
-        while (currentBufferIndex < segmentSize) {
-            const isEncrypted = new DataView(encryptedSegment.slice(currentBufferIndex, currentBufferIndex + 4)).getInt32();
-            currentBufferIndex = currentBufferIndex + 4;
-            const chunkSize = new DataView(encryptedSegment.slice(currentBufferIndex, currentBufferIndex + 4)).getInt32();
-            currentBufferIndex = currentBufferIndex + 4;
-            const actualDataChunk = encryptedSegment.slice(currentBufferIndex, currentBufferIndex + chunkSize);
-            currentBufferIndex = currentBufferIndex + chunkSize;
-
-            if (isEncrypted) {
-                actualDataChunk = await decryptChunk(actualDataChunk, iv, salt, pass);
-            }
-
-            finalBuffer = appendBuffer(finalBuffer, actualDataChunk);
-        }
-
-        return finalBuffer;
-    }
-
-    /**
-     * Decrypts an AES encrypted LS segment
-     * @param {ArrayBuffer} videoChunk LS segment
-     * @param {Object} headers Object with all the response headers from the request
-     * @returns Promise
-     */
-    async function decryptSegment(videoChunk, headers) {
-        if (videoChunk) {
-            let date;
-            let media;
-            let size = '';
-
-            // eslint-disable-next-line
-            if (STREAM_TYPE === 'VOD') {
-                const response = await fetch('https://encrypt-free.vividas.wize.mx/e/v3.1b/segment', { method: 'POST', body: videoChunk });
-                media = await response.arrayBuffer();
-                date = response.headers.get('ls_date');
-                size = videoChunk.byteLength
-            } else {
-                media = videoChunk;
-                date = headers['ls_date'];
-            }
-
-            const pass = navigator.userAgent + date + size;
-            const utf8 = new TextEncoder().encode(pass);
-            const hashBuffer = await crypto.subtle.digest('SHA-256', utf8);
-            const hashArray = Array.from(new Uint8Array(hashBuffer));
-            const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-
-            const decryptionParameters = {
-                pass: hashHex,
-                iv: media.slice(0, 12),
-                salt: media.slice(12, 12 + 16),
-                data: media.slice(12 + 16),
-            };
-
-            return decrypt(decryptionParameters.data, decryptionParameters.iv, decryptionParameters.salt, decryptionParameters.pass);
-        }
-    }
-
     function load(request) {
         const report = function (data, error) {
             eventBus.trigger(events.LOADING_COMPLETED, {
@@ -258,7 +113,13 @@ function FragmentLoader(config) {
                     }
                 },
                 success: function (data, status, url, headers) {
-                    decryptSegment(data, headers)
+                    // eslint-disable-next-line
+                    const vividas = new Vividas({
+                        // eslint-disable-next-line
+                        streamType: STREAM_TYPE
+                    });
+
+                    vividas.decrypt(data, headers)
                         .then((decrypted) => (report(decrypted)))
                         .catch((error) => (report(undefined, new DashJSError(
                             errors.FRAGMENT_LOADER_LOADING_FAILURE_ERROR_CODE,
