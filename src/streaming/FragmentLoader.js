@@ -114,10 +114,7 @@ function FragmentLoader(config) {
                 },
                 success: function (data, status, url, headers) {
                     // eslint-disable-next-line
-                    const vividas = new Vividas({
-                        // eslint-disable-next-line
-                        streamType: STREAM_TYPE
-                    });
+                    const vividas = Vividas.getInstance();
 
                     vividas.decrypt(data, headers)
                         .then((decrypted) => (report(decrypted)))
