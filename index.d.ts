@@ -45,6 +45,8 @@ declare namespace dashjs {
 
         clearMediaInfoArray(): void;
 
+        handleKeySystemFromManifest(): void;
+
         createKeySession(ksInfo: KeySystemInfo): void;
 
         loadKeySession(ksInfo: KeySystemInfo): void;
@@ -68,10 +70,6 @@ declare namespace dashjs {
         getKeySystems(): KeySystem[];
 
         setKeySystems(keySystems: KeySystem[]): void;
-
-        setLicenseRequestFilters(filters: RequestFilter[]): void;
-
-        setLicenseResponseFilters(filters: ResponseFilter[]): void;
 
         stop(): void;
 
@@ -153,6 +151,8 @@ declare namespace dashjs {
             wallclockTimeUpdateInterval?: number,
             manifestUpdateRetryInterval?: number,
             applyServiceDescription?: boolean,
+            applyProducerReferenceTime?: boolean,
+            applyContentSteering?: boolean,
             cacheInitSegments?: boolean,
             eventControllerRefreshDelay?: number,
             enableManifestDurationMismatchFix?: boolean,
@@ -192,6 +192,7 @@ declare namespace dashjs {
                 stallThreshold?: number,
                 useAppendWindow?: boolean,
                 setStallState?: boolean
+                avoidCurrentTimeRangePruning?: boolean
             },
             gaps?: {
                 jumpGaps?: boolean,
@@ -228,7 +229,6 @@ declare namespace dashjs {
             liveCatchup?: {
                 maxDrift?: number;
                 playbackRate?: number;
-                latencyThreshold?: number,
                 playbackBufferMin?: number,
                 enabled?: boolean
                 mode?: string
@@ -442,7 +442,7 @@ declare namespace dashjs {
 
         on(type: AdaptationSetRemovedNoCapabilitiesEvent['type'], listener: (e: AdaptationSetRemovedNoCapabilitiesEvent) => void, scope?: object): void;
         
-        on(type: string, listener: (e: Event) => void, scope?: object): void;
+        on(type: string, listener: (e: Event) => void, scope?: object, options?:object): void;
 
         
         off(type: string, listener: (e: any) => void, scope?: object): void;
@@ -466,6 +466,8 @@ declare namespace dashjs {
         isDynamic(): boolean;
 
         seek(value: number): void;
+
+        seekToOriginalLive(): void;
 
         setPlaybackRate(value: number): void;
 
@@ -606,6 +608,10 @@ declare namespace dashjs {
         getDashAdapter(): DashAdapter;
 
         getOfflineController(): OfflineController;
+
+        triggerSteeringRequest(): Promise<any>;
+
+        getCurrentSteeringResponseData(): object;
 
         getSettings(): MediaPlayerSettingClass;
 
